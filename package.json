@@ -1,0 +1,24 @@
+{
+  "name": "ai-shotta",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.8.4",
+    "chalk": "^5.4.1",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.5.0",
+    "openai": "^4.93.0",
+    "papaparse": "^5.5.2",
+    "ws": "^8.18.1"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.3.15"
+  }
+}
