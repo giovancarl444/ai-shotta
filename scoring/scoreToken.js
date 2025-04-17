@@ -1,44 +1,45 @@
-function scoreToken(token) {
-  let score = 0;
-  const name = token.name?.toLowerCase() || '';
-  const symbol = token.symbol?.toLowerCase() || '';
+// scoring/scoreToken.js
+const {
+  liquidityFilter,
+  honeypotFilter,
+  socialSignalFilter,
+  technicalIndicatorFilter
+} = require('../filters');
+const weights = require('./weights.json');
+const { logEvent } = require('../utils/logger');
 
-  // 1. Basic sanity checks
-  if (token.isSpam || name.includes('test') || symbol.includes('test')) return 0;
-  if (!token.name || !token.symbol || name.length < 2) return 0;
+/**
+ * Compute a combined score for a token entry.
+ * - Immediately skips if honeypot detected.
+ * - Runs all filters, multiplies by weights, and sums.
+ * @param {Object} entry  A queue entry with at least { address }
+ * @returns {number}      The final score (0–100 scale)
+ */
+async function scoreToken(entry) {
+  logEvent('info', `Scoring token ${entry.address}`);
 
-  // 2. Positive signals
-  if (token.logo) score += 10;
-  if (name.length <= 12) score += 10;
-  if (symbol.length <= 5) score += 10;
-
-  // 3. Popularity signals
-  if (token.holders && token.holders > 100) score += 10;
-  if (token.marketCap && token.marketCap > 50000) score += 15;
-  if (token.marketCap && token.marketCap > 500000) score += 10; // bonus for large caps
-
-  // 4. Metadata trust
-  if (token.metadataSource === 'moralis') score += 10;
-  if (token.metadataSource === 'birdeye') score += 5;
-
-  // 5. Meme/sniper optimization
-  const memeKeywords = ['elon', 'doge', 'pepe', 'trump', 'cat', 'frog', 'jeet', 'moon'];
-  if (memeKeywords.some(k => name.includes(k) || symbol.includes(k))) {
-    score += 10;
+  // 1) Honeypot check (immediate skip)
+  const { honeypot } = await honeypotFilter(entry);
+  if (honeypot) {
+    logEvent('warn', `Honeypot detected – skipping ${entry.address}`);
+    return 0;
   }
 
-  // 6. Red flag penalty
-  const redFlags = ['scam', 'rug', 'fuck', 'shit', 'kill'];
-  if (redFlags.some(k => name.includes(k) || symbol.includes(k))) {
-    score -= 20;
-  }
+  // 2) Run each filter
+  const { liquidityScore }       = await liquidityFilter(entry);
+  const { socialScore }          = await socialSignalFilter(entry);
+  const { technicalScore }       = await technicalIndicatorFilter(entry);
 
-  // 7. Source-based bonus
-  if (token.source === 'pump.fun') score += 10;
+  // 3) Combine via weights
+  const rawScore =
+    (weights.liquidity  * liquidityScore) +
+    (weights.social     * socialScore) +
+    (weights.technical  * technicalScore);
 
-  // Cap between 0–100
-  score = Math.max(0, Math.min(score, 100));
-  return score;
+  const finalScore = Number(rawScore.toFixed(2));
+  logEvent('info', `Score for ${entry.address}: ${finalScore}`);
+
+  return finalScore;
 }
 
 module.exports = { scoreToken };
