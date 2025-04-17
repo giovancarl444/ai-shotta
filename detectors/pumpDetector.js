@@ -1,77 +1,90 @@
-const instantEnrich = require('../enrichment/instantEnrich');
+// detectors/pumpDetector.js
+require('dotenv').config();
 const WebSocket = require('ws');
-const fs = require('fs');
-const path = require('path');
+const axios = require('axios');
+const { readQueue, writeQueue } = require('../utils/queue');
+const { logEvent } = require('../utils/logger');
+const states = require('../constants/queueStates');
+const instantEnrich = require('../enrichment/instantEnrich');
 
-const queuePath = path.join(__dirname, '..', 'data', 'snipingQueue.json');
+// Shared handler for new tokens
+async function handleNewToken(address) {
+  const queue = readQueue();
+  if (queue.some(t => t.address === address)) {
+    logEvent('info', `Token ${address} already in queue`);
+    return;
+  }
 
-function readQueue() {
-  if (!fs.existsSync(queuePath)) return [];
-  return JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  logEvent('info', `Handling new token ${address}`);
+  const enriched = await instantEnrich(address);
+
+  if (enriched) {
+    const entry = {
+      ...enriched,
+      detectedAt: new Date().toISOString(),
+      status: states.ENRICHED,
+      source: 'pump.fun',
+      lastUpdated: new Date().toISOString()
+    };
+    queue.push(entry);
+    logEvent('info', `Queued enriched token ${enriched.symbol || address}`);
+  } else {
+    const entry = {
+      address,
+      detectedAt: new Date().toISOString(),
+      status: states.RETRY_LATER,
+      source: 'pump.fun',
+      lastUpdated: new Date().toISOString()
+    };
+    queue.push(entry);
+    logEvent('warn', `Enrich failed, queued ${address} for retry later`);
+  }
+
+  writeQueue(queue);
 }
 
-function writeQueue(queue) {
-  fs.writeFileSync(queuePath, JSON.stringify(queue, null, 2));
-}
+// 1) WebSocket subscription
+function startWebSocket() {
+  const ws = new WebSocket('wss://pumpportal.fun/api/data');
 
-const ws = new WebSocket('wss://pumpportal.fun/api/data');
+  ws.on('open', () => {
+    logEvent('info', 'Connected to PumpPortal WS');
+    ws.send(JSON.stringify({ method: 'subscribeNewToken' }));
+  });
 
-ws.on('open', () => {
-  console.log('✅ Connected to PumpPortal');
-  const payload = {
-    method: 'subscribeNewToken',
-  };
-  ws.send(JSON.stringify(payload));
-  setTimeout(() => {
-    ws.emit('message', JSON.stringify({
-      method: 'newToken',
-      data: {
-        name: 'TestToken',
-        address: 'FAKE1234567890123456789012345678901234567890'
+  ws.on('message', async raw => {
+    try {
+      const msg = JSON.parse(raw);
+      if (msg.method === 'newToken' && msg.data?.address) {
+        await handleNewToken(msg.data.address);
       }
-    }));
-  }, 3000);  
-});
-
-ws.on('message', (data) => {
-    const msg = JSON.parse(data);
-    if (msg.method === 'newToken' && msg.data) {
-      const token = msg.data;
-      const queue = readQueue();
-  
-      const alreadyExists = queue.find(t => t.address === token.address);
-      if (!alreadyExists) {
-        (async () => {
-          const enriched = await instantEnrich(token.address || address);
-          if (enriched) {
-            queue.push({
-              ...enriched,
-              detectedAt: new Date().toISOString(),
-              status: 'enriched',
-              source: 'pump.fun' // or 'moralis'
-            });
-            console.log(`✅ Instantly enriched ${enriched.symbol}`);
-          } else {
-            queue.push({
-              address: token.address || address,
-              detectedAt: new Date().toISOString(),
-              status: 'retryLater',
-              source: 'pump.fun' // or 'moralis'
-            });
-            console.warn(`❌ Enrich failed, will retry later`);
-          }
-          writeQueue(queue);
-        })();
-    
-        
-        writeQueue(queue);
-        console.log(`🆕 Sniped new token: ${token.name} (${token.address})`);
-        console.log('📡 Incoming message:', msg);
-      }
+    } catch (err) {
+      logEvent('error', `WS message parse error: ${err.message}`);
     }
   });
-  
 
-ws.on('error', (err) => {
-  console.error('❌ WebSocket Error:', err.message);
-});
+  ws.on('error', err => logEvent('error', `WS error: ${err.message}`));
+}
+
+// 2) HTTP‑poll fallback
+targetURL = 'https://frontend-api.pump.fun/coins/currently-live';
+function startHttpPoll() {
+  setInterval(async () => {
+    try {
+      const res = await axios.get(targetURL);
+      const list = Array.isArray(res.data) ? res.data : res.data.coins || [];
+      for (const token of list) {
+        const addr = token.address || token.tokenAddress;
+        if (addr) await handleNewToken(addr);
+      }
+    } catch (err) {
+      logEvent('error', `HTTP poll error: ${err.message}`);
+    }
+  }, 5000);
+}
+
+// Bootstrap
+(async () => {
+  startWebSocket();
+  startHttpPoll();
+})();
