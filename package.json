@@ -1,25 +1,36 @@
 {
   "name": "ai-shotta",
   "version": "1.0.0",
+  "description": "Solana AI token sniper pipeline (detection → enrichment → scoring → simulation)",
   "main": "app.js",
   "scripts": {
+  "start": "concurrently \"node detectors/pumpDetector.js\" \"node snipeEngine.js\" \"node app.js\"",    "cleanup": "node scripts/manageQueue.js cleanup",
+    "migrate": "node scripts/manageQueue.js migrate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "solana",
+    "sniper",
+    "crypto",
+    "bot",
+    "ai"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@solana/web3.js": "^1.98.0",
     "axios": "^1.8.4",
-    "chalk": "^5.4.1",
+    "chalk": "^4.1.2",
+    "cors": "^2.8.5",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "openai": "^4.93.0",
     "papaparse": "^5.5.2",
     "ws": "^8.18.1"
   },
   "devDependencies": {
-    "@types/papaparse": "^5.3.15"
+    "@types/papaparse": "^5.3.15",
+    "concurrently": "^9.1.2"
   }
 }
