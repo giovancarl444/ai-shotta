@@ -2,3 +2,14 @@ node_modules
 .env
 .DS_Store
 *.log
+# Local caches & queues
+/data/enrichedCache.json
+/data/snipingQueue.json
+/data/snipingQueue_backup.json
+
+# Logs
+/logs/*.log
+
+# Environment files
+.env
+.env.local
