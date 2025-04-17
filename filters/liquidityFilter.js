@@ -1,84 +1,68 @@
 // filters/liquidityFilter.js
+require('dotenv').config();  // Load .env variables
 const { logEvent } = require('../utils/logger');
+const { Connection, PublicKey } = require('@solana/web3.js');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// RPC endpoint from .env must be set, e.g. SOLANA_RPC_URL
+const RPC_URL = process.env.SOLANA_RPC_URL;
+if (!RPC_URL || !(RPC_URL.startsWith('http://') || RPC_URL.startsWith('https://'))) {
+  throw new Error('SOLANA_RPC_URL must be set to a valid http(s) URL');
+}
+const connection = new Connection(RPC_URL, 'confirmed');
+
+// Generic retry wrapper for rate-limited calls
+async function retryable(fn, label, maxRetries = 5, initialDelay = 500) {
+  let attempt = 0, delay = initialDelay;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isRateLimit = /429/.test(err.message) || err.message.includes('Too many requests');
+      if (!isRateLimit || attempt >= maxRetries) throw err;
+      attempt++;
+      logEvent('warn', `${label} rate-limited, retry #${attempt} in ${delay}ms`);
+      await sleep(delay);
+      delay *= 2;
+    }
+  }
+}
 
 /**
- * Check on-chain liquidity for a token
- * @param {Object} entry - queue entry with address, etc.
- * @returns {Object} { liquidityScore: number }
+ * Compute a simple liquidityScore based on the largest token account balance
+ * @param {{ address: string }} entry
+ * @returns {{ liquidityScore: number }}
  */
 async function liquidityFilter(entry) {
+  const mintPubkey = new PublicKey(entry.address);
   logEvent('info', `Running liquidityFilter for ${entry.address}`);
-  // TODO: fetch token account data from Solana RPC, compute liquidity
-  const liquidityScore = 0; // placeholder
-  return { liquidityScore };
+
+  try {
+    // Fetch largest token accounts with retries
+    const resp = await retryable(
+      () => connection.getTokenLargestAccounts(mintPubkey),
+      'getTokenLargestAccounts'
+    );
+    const largest = resp.value[0];
+    if (!largest) throw new Error('No token accounts found');
+
+    // Fetch parsed account info with retries
+    const info = await retryable(
+      () => connection.getParsedAccountInfo(largest.address),
+      'getParsedAccountInfo'
+    );
+
+    const amountRaw = info.value?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
+    // Normalize to [0,1] based on a reference threshold
+    const maxRef = 10000;
+    const liquidityScore = Math.min(amountRaw / maxRef, 1);
+
+    logEvent('info', `Liquidity ${entry.address}: ${amountRaw} tokens -> score ${liquidityScore.toFixed(3)}`);
+    return { liquidityScore };
+  } catch (err) {
+    logEvent('error', `liquidityFilter error for ${entry.address}: ${err.message}`);
+    return { liquidityScore: 0 };
+  }
 }
 
 module.exports = { liquidityFilter };
-
-
-// filters/honeypotFilter.js
-const { logEvent: log } = require('../utils/logger');
-
-/**
- * Detect honeypot tokens by simulating small transfer
- * @param {Object} entry
- * @returns {Object} { honeypot: boolean }
- */
-async function honeypotFilter(entry) {
-  log('info', `Running honeypotFilter for ${entry.address}`);
-  // TODO: simulate a tiny sell to detect trap or transfer failure
-  const honeypot = false; // placeholder
-  return { honeypot };
-}
-
-module.exports = { honeypotFilter };
-
-
-// filters/socialSignalFilter.js
-const { logEvent } = require('../utils/logger');
-
-/**
- * Analyze social media signals
- * @param {Object} entry
- * @returns {Object} { socialScore: number }
- */
-async function socialSignalFilter(entry) {
-  logEvent('info', `Running socialSignalFilter for ${entry.address}`);
-  // TODO: integrate Twitter/Reddit APIs for mention count or sentiment
-  const socialScore = 0; // placeholder
-  return { socialScore };
-}
-
-module.exports = { socialSignalFilter };
-
-
-// filters/technicalIndicatorFilter.js
-const { logEvent } = require('../utils/logger');
-
-/**
- * Compute on-chain technical indicators (volume spikes, RSI)
- * @param {Object} entry
- * @returns {Object} { technicalScore: number }
- */
-async function technicalIndicatorFilter(entry) {
-  logEvent('info', `Running technicalIndicatorFilter for ${entry.address}`);
-  // TODO: fetch historic trade data, calculate RSI or volume anomalies
-  const technicalScore = 0; // placeholder
-  return { technicalScore };
-}
-
-module.exports = { technicalIndicatorFilter };
-
-
-// filters/index.js
-const { liquidityFilter } = require('./liquidityFilter');
-const { honeypotFilter }   = require('./honeypotFilter');
-const { socialSignalFilter } = require('./socialSignalFilter');
-const { technicalIndicatorFilter } = require('./technicalIndicatorFilter');
-
-module.exports = {
-  liquidityFilter,
-  honeypotFilter,
-  socialSignalFilter,
-  technicalIndicatorFilter
-};
