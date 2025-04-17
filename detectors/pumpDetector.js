@@ -1,10 +1,10 @@
 // detectors/pumpDetector.js
 require('dotenv').config();
-const WebSocket     = require('ws');
+const WebSocket           = require('ws');
 const { readQueue, writeQueue } = require('../utils/queue');
-const { logEvent }  = require('../utils/logger');
-const instantEnrich = require('../enrichment/instantEnrich');
-const states        = require('../constants/queueStates');
+const { logEvent }        = require('../utils/logger');
+const instantEnrich       = require('../enrichment/instantEnrich');
+const states              = require('../constants/queueStates');
 
 async function handleNewToken({ address, name }) {
   const queue = readQueue();
@@ -17,10 +17,12 @@ async function handleNewToken({ address, name }) {
   try {
     const enriched = await instantEnrich(address);
     const entry = enriched
-      ? { ...enriched,
+      ? {
+          ...enriched,
           detectedAt: new Date().toISOString(),
-          status:    states.ENRICHED,
-          source:    'pump.fun' }
+          status:     states.ENRICHED,
+          source:     'pump.fun'
+        }
       : {
           token:      name || address,
           address,
@@ -38,20 +40,10 @@ async function handleNewToken({ address, name }) {
 }
 
 function startWebSocket() {
-  const ws = new WebSocket('wss://pumpportal.fun/api/data');
+  const ws = new WebSocket(process.env.SOLANA_RPC_WSS_DETECTOR || 'wss://pumpportal.fun/api/data');
   ws.on('open', () => {
-    console.log('✅ Connected to PumpPortal WS');
+    logEvent('info', '✅ Connected to PumpPortal WS');
     ws.send(JSON.stringify({ method: 'subscribeNewToken' }));
-
-    // DEV‑only: inject a fake token
-    setTimeout(() => {
-      const testMsg = {
-        method: 'newToken',
-        data:   { name: 'DevToken', address: 'DEVTKN1234567890' }
-      };
-      console.log('🧪 DEV: injecting fake token →', testMsg);
-      ws.emit('message', JSON.stringify(testMsg));
-    }, 3000);
   });
 
   ws.on('message', async raw => {
