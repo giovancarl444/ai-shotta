@@ -1,24 +1,35 @@
-const { getNewTokens } = require('./scrapers/raydium');
-const { rateToken } = require('./ai/tokenfilter'); // lowercase f
-const { simulateTrade } = require('./simulator/snipeSimulator');
+// app.js
+require('dotenv').config();
+const express = require('express');
+const path    = require('path');
+const cors    = require('cors');
+const { readQueue } = require('./utils/queue');
 
-(async () => {
-  const tokens = await getNewTokens();
-  console.log(`📡 Scanning ${tokens.length} new tokens...`);
+const app = express();
+app.use(cors());  // allow your UI to fetch
 
-  for (let token of tokens.slice(0, 10)) {
-    const name = token.name || "Unknown";
-    const desc = token.baseMint || "No description";
-    const socials = token.marketUrl || "No socials";
+// Health‑check
+app.get('/health', (req, res) => {
+  res.send('OK');
+});
 
-    const { score, reason } = await rateToken(name, desc, socials);
-
-    if (score >= 6) {
-      await simulateTrade(name, score);
-    } else {
-      console.log(`❌ Skipped ${name} [Score ${score}] - ${reason}`);
-    }
+// Return the full queue as JSON
+app.get('/api/queue', (req, res) => {
+  try {
+    const queue = readQueue();
+    res.json(queue);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  console.log('✅ Simulation complete. Check CSV.');
-})();
+// (Optional) Stream logs
+app.get('/api/logs', (req, res) => {
+  res.sendFile(path.resolve(__dirname, 'logs/app.log'));
+});
+
+// Start server
+const PORT = process.env.API_PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 API listening on port ${PORT}`);
+});

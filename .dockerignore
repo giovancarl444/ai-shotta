@@ -1,5 +1,5 @@
 node_modules
 logs
-data/*.json
-.env
-.git
+data/*.log
+data/enrichedCache.json
+data/snipingQueue_backup.json
