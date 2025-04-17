@@ -8,6 +8,9 @@ const instantEnrich = require('./enrichment/instantEnrich');
 const { scoreToken } = require('./scoring/scoreToken');
 const { simulateSnipe } = require('./simulation/simulateSnipes');
 
+// Max enrichment retries before skipping
+const MAX_ENRICH_RETRIES = parseInt(process.env.ENRICH_MAX_RETRIES, 10) || 3;
+
 /**
  * Main processing loop: enrichment, scoring, simulation
  */
@@ -20,24 +23,36 @@ async function processQueue() {
   for (const entry of queue) {
     if (![states.DETECTED, states.RETRY_LATER].includes(entry.status)) continue;
     const addr = entry.address;
-    logEvent('info', `Enrichment phase for ${addr}`);
+    const retries = entry.retryCount || 0;
+
+    // If exceeded retries, skip permanently
+    if (entry.status === states.RETRY_LATER && retries >= MAX_ENRICH_RETRIES) {
+      updateQueueEntry(addr, { status: states.SKIPPED });
+      logEvent('warn', `Max enrich retries reached for ${addr}, skipping`);
+      updated = true;
+      continue;
+    }
+
+    logEvent('info', `Enrichment phase for ${addr} (retry #${retries})`);
     try {
       const enriched = await instantEnrich(addr);
       if (enriched) {
-        updateQueueEntry(addr, { ...enriched, status: states.ENRICHED });
+        updateQueueEntry(addr, { ...enriched, status: states.ENRICHED, retryCount: 0 });
         logEvent('info', `Enriched ${addr}`);
       } else {
-        const retries = (entry.retryCount || 0) + 1;
-        updateQueueEntry(addr, { retryCount: retries, status: states.RETRY_LATER });
-        logEvent('warn', `Retry ${retries} for ${addr}`);
+        updateQueueEntry(addr, { retryCount: retries + 1, status: states.RETRY_LATER });
+        logEvent('warn', `Enrichment retry #${retries + 1} for ${addr}`);
       }
       updated = true;
     } catch (err) {
-      logEvent('error', `Enrichment error for ${addr}: ${err.message}`);
+      // Treat unhandled errors as retry
+      updateQueueEntry(addr, { retryCount: retries + 1, status: states.RETRY_LATER });
+      logEvent('error', `Enrichment error for ${addr}: ${err.message} (retrying)`);
+      updated = true;
     }
   }
 
-  // Reload queue for fresh statuses
+  // Reload queue with updated statuses
   queue = readQueue();
 
   // 2) Scoring phase
@@ -51,7 +66,9 @@ async function processQueue() {
       logEvent('info', `Scored ${addr}: ${aiScore}`);
       updated = true;
     } catch (err) {
-      logEvent('error', `Scoring error for ${addr}: ${err.message}`);
+      updateQueueEntry(addr, { status: states.SKIPPED });
+      logEvent('error', `Scoring error for ${addr}: ${err.message}, skipping`);
+      updated = true;
     }
   }
 
@@ -70,11 +87,12 @@ async function processQueue() {
       logEvent('info', `Simulated ${addr}: ${nextStatus} (profit: ${result.profit})`);
       updated = true;
     } catch (err) {
-      logEvent('error', `Simulation error for ${addr}: ${err.message}`);
+      updateQueueEntry(addr, { status: states.SKIPPED });
+      logEvent('error', `Simulation error for ${addr}: ${err.message}, skipping`);
+      updated = true;
     }
   }
 
-  // Finalize
   if (updated) {
     writeQueue(readQueue());
     logEvent('info', '✅ Queue updated');
@@ -84,6 +102,6 @@ async function processQueue() {
 }
 
 // Schedule processing
-const intervalMs = parseInt(process.env.PROCESS_INTERVAL_MS, 10) || 5000;
-setInterval(processQueue, intervalMs);
+envInterval = parseInt(process.env.PROCESS_INTERVAL_MS, 10) || 5000;
+setInterval(processQueue, envInterval);
 logEvent('info', 'Snipe engine started');
