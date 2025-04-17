@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@solana/web3.js": "^1.98.0",
     "axios": "^1.8.4",
     "chalk": "^5.4.1",
     "csv-writer": "^1.6.0",
