@@ -12,12 +12,19 @@ function ensureFiles() {
   // Cache directory
   const cacheDir = path.dirname(cachePath);
   if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-  if (!fs.existsSync(cachePath)) fs.writeFileSync(cachePath, JSON.stringify({}));
+  // Initialize or repair cache file
+  try {
+    if (!fs.existsSync(cachePath) || fs.statSync(cachePath).size === 0) {
+      fs.writeFileSync(cachePath, JSON.stringify({}));
+    }
+  } catch (err) {
+    fs.writeFileSync(cachePath, JSON.stringify({}));
+  }
   
   // Logs directory
   const logDir = path.dirname(logPath);
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
-  if (!fs.existsSync(logPath)) fs.writeFileSync(logPath, '');
+  if (!fs.existsSync(logPath) || fs.statSync(logPath).size === 0) fs.writeFileSync(logPath, '');
 }
 
 // Append a log entry to the enrichment log
@@ -29,7 +36,14 @@ function logEntry(message) {
 // Main instant enrichment function
 async function instantEnrich(address) {
   ensureFiles();
-  const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  let cache = {};
+  try {
+    cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+  } catch (parseErr) {
+    logEntry(`CACHE PARSE ERROR for ${address}: ${parseErr.message}, resetting cache`);
+    cache = {};
+    fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2));
+  }
 
   // Return cached data if available
   if (cache[address]) {
