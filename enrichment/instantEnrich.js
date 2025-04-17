@@ -1,9 +1,43 @@
 // enrichment/instantEnrich.js
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
-// Example using Moralis + optional Pump.fun fallback
+// Paths for cache and logs
+const cachePath = path.resolve(__dirname, '../data/enrichedCache.json');
+const logPath = path.resolve(__dirname, '../logs/enrichment.log');
+
+// Ensure cache and logs directory/files exist
+function ensureFiles() {
+  // Cache directory
+  const cacheDir = path.dirname(cachePath);
+  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+  if (!fs.existsSync(cachePath)) fs.writeFileSync(cachePath, JSON.stringify({}));
+  
+  // Logs directory
+  const logDir = path.dirname(logPath);
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+  if (!fs.existsSync(logPath)) fs.writeFileSync(logPath, '');
+}
+
+// Append a log entry to the enrichment log
+function logEntry(message) {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync(logPath, `[${timestamp}] ${message}\n`);
+}
+
+// Main instant enrichment function
 async function instantEnrich(address) {
-  const result = {
+  ensureFiles();
+  const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+
+  // Return cached data if available
+  if (cache[address]) {
+    logEntry(`CACHE HIT for ${address}`);
+    return cache[address];
+  }
+
+  let result = {
     address,
     name: '',
     symbol: '',
@@ -13,44 +47,55 @@ async function instantEnrich(address) {
     source: '',
   };
 
+  // Try Moralis first
   try {
-    // First try Moralis
-    const res = await axios.get(`https://solana-gateway.moralis.io/token/mainnet/${address}`, {
-      headers: {
-        'X-API-Key': process.env.MORALIS_API_KEY,
-      },
-    });
-
+    const res = await axios.get(
+      `https://solana-gateway.moralis.io/token/mainnet/${address}`,
+      { headers: { 'X-API-Key': process.env.MORALIS_API_KEY } }
+    );
     const data = res.data;
-    result.name = data.name || '';
-    result.symbol = data.symbol || '';
-    result.decimals = data.decimals || 9;
-    result.logo = data.logo || '';
-    result.createdAt = data.createdAt || '';
-    result.source = 'moralis';
-
-    return result;
+    result = {
+      ...result,
+      name: data.name || '',
+      symbol: data.symbol || '',
+      decimals: data.decimals || 9,
+      logo: data.logo || '',
+      createdAt: data.createdAt || '',
+      source: 'moralis',
+    };
+    logEntry(`SUCCESS Moralis for ${address}`);
   } catch (moralisErr) {
-    console.warn(`❌ Moralis failed: ${moralisErr.response?.status} for ${address}`);
+    logEntry(`Moralis failed for ${address}: ${moralisErr.response?.status || moralisErr.message}`);
 
-    // Fallback idea: Pull from Pump.fun public list (if exists or stored)
+    // Fallback to Pump.fun token list
     try {
-      const pumpListRes = await axios.get('https://pump.fun/api/token-list'); // Replace if real endpoint differs
-      const token = pumpListRes.data.tokens.find(t => t.address === address);
-
+      const pumpRes = await axios.get('https://pump.fun/api/token-list'); // Update URL if needed
+      const token = pumpRes.data.tokens.find(t => t.address === address);
       if (token) {
-        result.name = token.name || '';
-        result.symbol = token.symbol || '';
-        result.logo = token.image || '';
-        result.source = 'pumpfun';
-        return result;
+        result = {
+          ...result,
+          name: token.name || '',
+          symbol: token.symbol || '',
+          decimals: token.decimals || result.decimals,
+          logo: token.image || '',
+          createdAt: token.listedAt || '',
+          source: 'pumpfun',
+        };
+        logEntry(`SUCCESS Pump.fun for ${address}`);
+      } else {
+        throw new Error('Not found in Pump.fun list');
       }
     } catch (pumpErr) {
-      console.warn(`⚠️ Pump.fun fallback failed for ${address}`);
+      logEntry(`Pump.fun failed for ${address}: ${pumpErr.message}`);
+      return null;
     }
-
-    return null;
   }
+
+  // Cache the successful result
+  cache[address] = result;
+  fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2));
+
+  return result;
 }
 
 module.exports = instantEnrich;

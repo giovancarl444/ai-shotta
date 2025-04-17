@@ -42,29 +42,27 @@ ws.on('message', (data) => {
       const alreadyExists = queue.find(t => t.address === token.address);
       if (!alreadyExists) {
         (async () => {
-          const enriched = await instantEnrich(token.address);
-        
+          const enriched = await instantEnrich(token.address || address);
           if (enriched) {
             queue.push({
               ...enriched,
               detectedAt: new Date().toISOString(),
               status: 'enriched',
-              source: 'pump.fun'
+              source: 'pump.fun' // or 'moralis'
             });
-            console.log(`✅ Instantly enriched ${enriched.symbol || token.address}`);
+            console.log(`✅ Instantly enriched ${enriched.symbol}`);
           } else {
             queue.push({
-              token: token.name || 'Unnamed',
-              address: token.address,
+              address: token.address || address,
               detectedAt: new Date().toISOString(),
               status: 'retryLater',
-              source: 'pump.fun'
+              source: 'pump.fun' // or 'moralis'
             });
-            console.warn(`❌ Enrichment failed for ${token.address}, queued for retry`);
+            console.warn(`❌ Enrich failed, will retry later`);
           }
-        
           writeQueue(queue);
         })();
+    
         
         writeQueue(queue);
         console.log(`🆕 Sniped new token: ${token.name} (${token.address})`);

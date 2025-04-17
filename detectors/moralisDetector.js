@@ -40,29 +40,27 @@ async function fetchNewTokens() {
       const exists = queue.find(q => q.address === address);
       if (!exists) {
         (async () => {
-          const enriched = await instantEnrich(address);
-        
+          const enriched = await instantEnrich(token.address || address);
           if (enriched) {
             queue.push({
               ...enriched,
               detectedAt: new Date().toISOString(),
               status: 'enriched',
-              source: 'moralis'
+              source: 'pump.fun' // or 'moralis'
             });
-            console.log(`✅ Instantly enriched ${enriched.symbol || address}`);
+            console.log(`✅ Instantly enriched ${enriched.symbol}`);
           } else {
             queue.push({
-              token: token.name || token.symbol || 'Unnamed',
-              address: address,
+              address: token.address || address,
               detectedAt: new Date().toISOString(),
               status: 'retryLater',
-              source: 'moralis'
+              source: 'pump.fun' // or 'moralis'
             });
-            console.warn(`❌ Enrichment failed for ${address}, queued for retry`);
+            console.warn(`❌ Enrich failed, will retry later`);
           }
-        
           writeQueue(queue);
-        })();        
+        })();
+        
         console.log(`🆕 Moralis token: ${token.name} (${address})`);
         added++;
       }
