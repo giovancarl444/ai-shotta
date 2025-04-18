@@ -5,8 +5,8 @@
   "main": "app.js",
   "scripts": {
     "start": "concurrently \"node detectors/pumpDetector.js\" \"node snipeEngine.js\" \"node app.js\"",
-    "cleanup": "node scripts/manageQueue.js cleanup",
     "migrate": "node scripts/manageQueue.js migrate",
+    "cleanup": "node scripts/manageQueue.js cleanup",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
