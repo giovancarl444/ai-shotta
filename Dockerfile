@@ -1,26 +1,23 @@
-# Stage 1: Install production deps
-FROM node:18-alpine AS deps
+# Dockerfile
+# ─────────────────────────────────────────────────────────────
+
+# 1. Use April 2025’s Node LTS (v20) on slim for minimal footprint
+FROM node:20-slim
+
+# 2. Make /usr/src/app your working dir
 WORKDIR /usr/src/app
-COPY package*.json ./
-RUN npm ci --only=production
 
-# Stage 2: Copy code & run as non‑root
-FROM node:18-alpine
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# 3. Copy only the manifest files first (so changes to code don’t bust the npm cache)
+COPY package.json package-lock.json ./
 
-USER appuser
-WORKDIR /home/appuser/app
+# 4. Install production deps only
+RUN npm ci --omit=dev
 
-# Bring in only prod deps
-COPY --from=deps /usr/src/app/node_modules ./node_modules
+# 5. Copy the rest of your source
+COPY . .
 
-# Copy source
-COPY --chown=appuser:appgroup . .
+# 6. Expose your API port
+EXPOSE 3000
 
-# Expose API port
-ARG API_PORT=3000
-ENV API_PORT=${API_PORT}
-EXPOSE ${API_PORT}
-
-# Start everything
-CMD ["npm","start"]
+# 7. Launch detector, engine & API
+CMD ["npm", "start"]
