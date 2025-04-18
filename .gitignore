@@ -15,3 +15,14 @@ logs/*.log
 # OS / IDE
 .DS_Store
 .vscode/
+
+# data files
+/data/enrichedCache.json
+/data/snipingQueue.json
+/data/snipingQueue_backup.json
+
+# logs
+/logs/*.log
+
+# local env
+.env

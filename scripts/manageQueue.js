@@ -1,50 +1,58 @@
+#!/usr/bin/env node
 // scripts/manageQueue.js
 
-const fs   = require('fs');
-const path = require('path');
-const queuePath = path.resolve(__dirname, '..', 'data', 'snipingQueue.json');
+require('dotenv').config();
+const { readQueue, writeQueue } = require('../utils/queue');
+const states = require('../constants/queueStates');
 
-/**
- * Migrate all `pending` → `detected`.
- */
-function migrate() {
-  const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+async function migrate() {
+  const queue = readQueue();
   let changed = false;
-  queue.forEach(e => {
-    if (e.status === 'pending') {
-      e.status = 'detected';
-      delete e.score;
-      e.source = e.source || 'manual';
+  const now = Date.now();
+
+  queue.forEach((item, i) => {
+    if (item.status === states.PENDING) {
+      queue[i].status = states.DETECTED;
       changed = true;
     }
   });
+
   if (changed) {
-    fs.writeFileSync(queuePath, JSON.stringify(queue, null, 2));
-    console.log('✅ Migrated pending → detected');
+    writeQueue(queue);
+    console.log('✅ Migrated all PENDING → DETECTED');
   } else {
-    console.log('⏸ Nothing to migrate');
+    console.log('⚠️  No PENDING tokens to migrate');
   }
 }
 
-/**
- * Remove all non-`detected` or `retryLater` entries
- * (i.e. cleaned out tokens we’ve already processed or skipped).
- */
-function cleanup() {
-  const valid = new Set(['detected', 'retryLater']);
-  const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
-  const filtered = queue.filter(e => valid.has(e.status));
-  fs.writeFileSync(queuePath, JSON.stringify(filtered, null, 2));
-  console.log(`✅ Cleaned queue: kept ${filtered.length}/${queue.length} entries`);
+async function cleanup() {
+  const queue = readQueue();
+  const cutoff = Date.now() - (process.env.CLEANUP_MAX_AGE_MS || 24*3600*1000);
+  const before = queue.length;
+  // Remove entries DETECTED older than cutoff, or SKIPPED
+  const pruned = queue.filter(item => {
+    if (item.status === states.SKIPPED) return false;
+    if (item.status === states.DETECTED && new Date(item.detectedAt).getTime() < cutoff) {
+      return false;
+    }
+    return true;
+  });
+  if (pruned.length !== before) {
+    writeQueue(pruned);
+    console.log(`✅ Cleaned up ${before - pruned.length} old/skipped entries`);
+  } else {
+    console.log('⚠️  Nothing to clean up');
+  }
 }
 
-// Read command from CLI
-const cmd = process.argv[2];
-if (cmd === 'migrate') {
-  migrate();
-} else if (cmd === 'cleanup') {
-  cleanup();
-} else {
-  console.log('Usage: node manageQueue.js <migrate|cleanup>');
-  process.exit(1);
-}
+(async () => {
+  const cmd = process.argv[2];
+  if (cmd === 'migrate') {
+    await migrate();
+  } else if (cmd === 'cleanup') {
+    await cleanup();
+  } else {
+    console.error('Usage: manageQueue.js [migrate|cleanup]');
+    process.exit(1);
+  }
+})();
