@@ -1,45 +1,49 @@
-require('dotenv').config();
-const { Connection, PublicKey }   = require('@solana/web3.js');
-const { TokenListProvider, ENV } = require('@solana/spl-token-registry');
+const fetch = require("node-fetch");
+require("dotenv").config();
 
-const RPC = process.env.SOLANA_RPC_URL;
-const conn = new Connection(RPC, 'confirmed');
+const BIRDEYE_API_KEY = process.env.BIRDEYE_API_KEY;
+const MAX_RETRIES = parseInt(process.env.ENRICH_MAX_RETRIES || "2");
 
-let cachedList = null;
-async function loadTokenList() {
-  if (!cachedList) {
-    const all = await new TokenListProvider().resolve();
-    cachedList = all.filterByChainId(ENV.MainnetBeta).getList();
+async function enrichFromBirdeye(tokenAddress) {
+  const url = `https://public-api.birdeye.so/public/token/${tokenAddress}?apikey=${BIRDEYE_API_KEY}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Birdeye error: ${res.status}`);
+    const { data } = await res.json();
+    return {
+      name: data.name || null,
+      symbol: data.symbol || null,
+      price: parseFloat(data.price_usd || 0),
+      liquidity: parseFloat(data.liquidity || 0),
+      twitterFollowers: data.twitter_followers || 0,
+      hasWebsite: !!data.website,
+    };
+  } catch (err) {
+    console.warn(`[Birdeye] ${err.message}`);
+    return null;
   }
-  return cachedList;
 }
 
-module.exports = async function instantEnrich(address) {
-  // 1) Token registry
-  const list = await loadTokenList();
-  const info = list.find(t => t.address === address);
-  if (info) {
-    return {
-      token:    info.symbol,
-      name:     info.name,
-      address,
-      decimals: info.decimals,
-      logoURI:  info.logoURI,
-    };
-  }
+async function enrichFromMoralis(tokenAddress) {
+  // fallback stub, you can implement Moralis call if needed
+  console.warn("[Fallback] Moralis enrichment not yet implemented.");
+  return {
+    name: null,
+    symbol: null,
+    price: 0,
+    liquidity: 0,
+    twitterFollowers: 0,
+    hasWebsite: false,
+  };
+}
 
-  // 2) On‑chain mint for decimals
-  try {
-    const pub = new PublicKey(address);
-    const resp = await conn.getParsedAccountInfo(pub);
-    const parsed = resp.value?.data?.parsed?.info;
-    if (parsed?.decimals != null) {
-      return { token: address.slice(0,8), name: address.slice(0,8), address, decimals: parsed.decimals, logoURI: null };
-    }
-  } catch (err) {
-    console.warn('instantEnrich on-chain fallback error:', err.message);
+async function instantEnrich(tokenAddress) {
+  let result = null;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    result = await enrichFromBirdeye(tokenAddress);
+    if (result) return result;
   }
+  return await enrichFromMoralis(tokenAddress);
+}
 
-  // 3) Give up
-  return null;
-};
+module.exports = { instantEnrich };
