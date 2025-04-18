@@ -4,7 +4,8 @@
   "description": "Solana AI token sniper pipeline (detection → enrichment → scoring → simulation)",
   "main": "app.js",
   "scripts": {
-  "start": "concurrently \"node detectors/pumpDetector.js\" \"node snipeEngine.js\" \"node app.js\"",    "cleanup": "node scripts/manageQueue.js cleanup",
+    "start": "concurrently \"node detectors/pumpDetector.js\" \"node snipeEngine.js\" \"node app.js\"",
+    "cleanup": "node scripts/manageQueue.js cleanup",
     "migrate": "node scripts/manageQueue.js migrate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -18,6 +19,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@solana/spl-token-registry": "^0.2.4574",
     "@solana/web3.js": "^1.98.0",
     "axios": "^1.8.4",
     "chalk": "^4.1.2",

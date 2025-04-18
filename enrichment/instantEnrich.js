@@ -1,47 +1,46 @@
 // enrichment/instantEnrich.js
 require('dotenv').config();
-const axios = require('axios');
-const { logEvent } = require('../utils/logger');
+const { Connection, PublicKey } = require('@solana/web3.js');
+const { TokenListProvider, ENV }     = require('@solana/spl-token-registry');
 
-const MAX_RETRIES = parseInt(process.env.ENRICH_MAX_RETRIES, 10) || 2;
-const RPC = process.env.SOLANA_RPC_URL;
+const connection = new Connection(process.env.SOLANA_RPC_URL);
 
-async function instantEnrich(address) {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      logEvent('info', `instantEnrich: fetching metadata for ${address} (try ${attempt})`);
-      const res = await axios.get(
-        `${process.env.BIRDEYE_METADATA_KEY
-          ? `https://api.birdeye.so/tokens/${address}/metadata?api-key=${process.env.BIRDEYE_METADATA_KEY}`
-          : `https://api.projectserum.com/token/${address}/meta`}`
-      );
-      // if the service returns no body, bail
-      if (!res.data) throw new Error('Empty response body');
-      // assume it’s valid JSON already – but just in case:
-      let meta;
-      try {
-        meta = typeof res.data === 'object' ? res.data : JSON.parse(res.data);
-      } catch (parseErr) {
-        throw new Error(`JSON parse error: ${parseErr.message}`);
-      }
-      // pull out the fields you care about
+module.exports = async function instantEnrich(address) {
+  try {
+    // 1) Try the on‑chain token registry
+    const allTokens = await new TokenListProvider().resolve();
+    const tokenList = allTokens
+      .filterByChainId(ENV.MainnetBeta)
+      .getList();
+    const info = tokenList.find(t => t.address === address);
+
+    if (info) {
       return {
-        address,
-        symbol: meta.symbol || address.slice(0,6),
-        name: meta.name || '',
-        logoURI: meta.logoURI || meta.image,
+        token:     info.symbol,
+        address:   info.address,
+        name:      info.name,
+        logoURI:   info.logoURI,
+        decimals:  info.decimals
       };
-    } catch (err) {
-      logEvent('warn', `instantEnrich error (${err.message}), attempt ${attempt}`);
-      // if it was the last retry, give up
-      if (attempt === MAX_RETRIES) {
-        logEvent('error', `instantEnrich giving up on ${address}`);
-        return null;
-      }
-      // otherwise wait a bit before retrying
-      await new Promise(r => setTimeout(r, 200 * attempt));
     }
-  }
-}
 
-module.exports = instantEnrich;
+    // 2) Fallback: fetch mint account on‑chain for decimals
+    const pubkey = new PublicKey(address);
+    const resp   = await connection.getParsedAccountInfo(pubkey);
+    const parsed = resp.value?.data?.parsed?.info;
+    if (parsed && parsed.decimals != null) {
+      return {
+        token:     address.slice(0, 8),
+        address,
+        name:      address.slice(0, 8),
+        logoURI:   null,
+        decimals:  parsed.decimals
+      };
+    }
+
+    // 3) If that also fails, give up
+    return null;
+  } catch (err) {
+    throw new Error(`instantEnrich failed: ${err.message}`);
+  }
+};
