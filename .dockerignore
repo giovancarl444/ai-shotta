@@ -1,5 +1,5 @@
 node_modules
 logs
-data/*.log
-data/enrichedCache.json
-data/snipingQueue_backup.json
+.env
+docker-compose*.yml
+.git

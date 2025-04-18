@@ -1,89 +1,44 @@
-// snipeEngine.js
 require('dotenv').config();
+const { readQueue, writeQueue } = require('./utils/queue');
+const states                    = require('./constants/queueStates');
+const scoreToken                = require('./scoring/scoreToken');
+const simulateSnipes            = require('./simulation/simulateSnipes');
 
-const { readQueue, writeQueue, updateQueueEntry } = require('./utils/queue');
-const { logEvent } = require('./utils/logger');
-const states = require('./constants/queueStates');
-const instantEnrich = require('./enrichment/instantEnrich');
-const { scoreToken } = require('./scoring/scoreToken');
-const { simulateSnipe } = require('./simulation/simulateSnipes');
+const INTERVAL = parseInt(process.env.PROCESS_INTERVAL_MS, 10) || 5000;
+let busy = false;
 
-/**
- * Main processing loop: enrichment, scoring, simulation
- */
-async function processQueue() {
-  logEvent('info', 'Snipe engine: starting queue processing');
-  let queue = readQueue();
-  let updated = false;
+async function tick() {
+  if (busy) return;
+  busy = true;
 
-  // 1) Enrichment phase
-  for (const entry of queue) {
-    if (![states.DETECTED, states.RETRY_LATER].includes(entry.status)) continue;
-    const addr = entry.address;
-    logEvent('info', `Enrichment phase for ${addr}`);
+  const queue = readQueue();
+
+  // 1) Score all DETECTED tokens
+  for (const item of queue.filter(t => t.status === states.DETECTED)) {
     try {
-      const enriched = await instantEnrich(addr);
-      if (enriched) {
-        updateQueueEntry(addr, { ...enriched, status: states.ENRICHED });
-        logEvent('info', `Enriched ${addr}`);
-      } else {
-        const retries = (entry.retryCount || 0) + 1;
-        updateQueueEntry(addr, { retryCount: retries, status: states.RETRY_LATER });
-        logEvent('warn', `Retry ${retries} for ${addr}`);
-      }
-      updated = true;
+      const { score } = await scoreToken(item.address);
+      item.score  = score;
+      item.status = states.READY;
     } catch (err) {
-      logEvent('error', `Enrichment error for ${addr}: ${err.message}`);
+      console.error(`Error scoring ${item.address}:`, err.message);
     }
   }
 
-  // Reload queue for fresh statuses
-  queue = readQueue();
-
-  // 2) Scoring phase
-  for (const entry of queue) {
-    if (entry.status !== states.ENRICHED) continue;
-    const addr = entry.address;
-    logEvent('info', `Scoring phase for ${addr}`);
+  // 2) Simulate all READY tokens
+  for (const item of queue.filter(t => t.status === states.READY)) {
     try {
-      const aiScore = await scoreToken(entry);
-      updateQueueEntry(addr, { aiScore, status: states.SCORED });
-      logEvent('info', `Scored ${addr}: ${aiScore}`);
-      updated = true;
+      const result = await simulateSnipes(item.address);
+      item.result = result;
+      item.status = states.COMPLETED;
     } catch (err) {
-      logEvent('error', `Scoring error for ${addr}: ${err.message}`);
+      console.error(`Error simulating ${item.address}:`, err.message);
     }
   }
 
-  // Reload queue for simulation
-  queue = readQueue();
-
-  // 3) Simulation phase
-  for (const entry of queue) {
-    if (entry.status !== states.SCORED) continue;
-    const addr = entry.address;
-    logEvent('info', `Simulation phase for ${addr}`);
-    try {
-      const result = await simulateSnipe(entry);
-      const nextStatus = result.success ? states.READY : states.SKIPPED;
-      updateQueueEntry(addr, { simulatedProfit: result.profit, status: nextStatus });
-      logEvent('info', `Simulated ${addr}: ${nextStatus} (profit: ${result.profit})`);
-      updated = true;
-    } catch (err) {
-      logEvent('error', `Simulation error for ${addr}: ${err.message}`);
-    }
-  }
-
-  // Finalize
-  if (updated) {
-    writeQueue(readQueue());
-    logEvent('info', '✅ Queue updated');
-  } else {
-    logEvent('info', '⏸ Nothing new to process');
-  }
+  writeQueue(queue);
+  busy = false;
 }
 
-// Schedule processing
-const intervalMs = parseInt(process.env.PROCESS_INTERVAL_MS, 10) || 5000;
-setInterval(processQueue, intervalMs);
-logEvent('info', 'Snipe engine started');
+console.info('🔁 Snipe engine started');
+setInterval(tick, INTERVAL);
+tick();

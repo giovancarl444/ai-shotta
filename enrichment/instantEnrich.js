@@ -1,22 +1,21 @@
-// enrichment/instantEnrich.js
 require('dotenv').config();
-const { Connection } = require('@solana/web3.js');
-const { TokenListProvider } = require('@solana/spl-token-registry');
+const { Connection, PublicKey }   = require('@solana/web3.js');
+const { TokenListProvider, ENV } = require('@solana/spl-token-registry');
 
 const RPC = process.env.SOLANA_RPC_URL;
-const MAX = parseInt(process.env.ENRICH_MAX_RETRIES) || 2;
-const conn = new Connection(RPC);
+const conn = new Connection(RPC, 'confirmed');
 
-let tokenList = null;
+let cachedList = null;
 async function loadTokenList() {
-  if (!tokenList) {
-    tokenList = await new TokenListProvider().resolve();
-    tokenList = tokenList.filterByChainId(101).getList(); // 101 = mainnet
+  if (!cachedList) {
+    const all = await new TokenListProvider().resolve();
+    cachedList = all.filterByChainId(ENV.MainnetBeta).getList();
   }
-  return tokenList;
+  return cachedList;
 }
 
 module.exports = async function instantEnrich(address) {
+  // 1) Token registry
   const list = await loadTokenList();
   const info = list.find(t => t.address === address);
   if (info) {
@@ -25,9 +24,22 @@ module.exports = async function instantEnrich(address) {
       name:     info.name,
       address,
       decimals: info.decimals,
-      logoURI:  info.logoURI
+      logoURI:  info.logoURI,
     };
   }
-  // no on‑chain metadata found
+
+  // 2) On‑chain mint for decimals
+  try {
+    const pub = new PublicKey(address);
+    const resp = await conn.getParsedAccountInfo(pub);
+    const parsed = resp.value?.data?.parsed?.info;
+    if (parsed?.decimals != null) {
+      return { token: address.slice(0,8), name: address.slice(0,8), address, decimals: parsed.decimals, logoURI: null };
+    }
+  } catch (err) {
+    console.warn('instantEnrich on-chain fallback error:', err.message);
+  }
+
+  // 3) Give up
   return null;
 };

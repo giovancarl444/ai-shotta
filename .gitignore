@@ -1,28 +1,15 @@
 # Node
 node_modules/
-package-lock.json
 npm-debug.log
 
 # Env
 .env
-.env.local
 .env.*.local
 
 # Data & logs
-data/*.json
-logs/*.log
-
-# OS / IDE
-.DS_Store
-.vscode/
-
-# data files
-/data/enrichedCache.json
-/data/snipingQueue.json
-/data/snipingQueue_backup.json
-
-# logs
+/data/*.json
 /logs/*.log
 
-# local env
-.env
+# IDE / OS
+.vscode/
+.DS_Store
