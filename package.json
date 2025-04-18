@@ -6,6 +6,7 @@
   "scripts": {
     "start": "concurrently \"node detectors/pumpDetector.js\" \"node snipeEngine.js\" \"node app.js\"",
     "watch": "node detector/index.js",
+    "watch:quicknode": "node detector/quicknodeDetector.js",
     "watch:moralis": "node detector/moralisPoller.js",
     "migrate": "node scripts/manageQueue.js migrate",
     "cleanup": "node scripts/manageQueue.js cleanup",
