@@ -5,9 +5,9 @@ const fs = require("fs");
 const path = require("path");
 
 const QUEUE_PATH = path.join(__dirname, "..", "data", "snipingQueue.json");
-const WSS_URL = process.env.SOLANA_RPC_WSS;
+const HTTP_URL = process.env.SOLANA_RPC_URL;
 
-const connection = new Connection(WSS_URL, "confirmed");
+const connection = new Connection(HTTP_URL, "confirmed");
 let seen = new Set();
 
 function readQueue() {
