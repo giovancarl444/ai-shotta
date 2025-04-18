@@ -19,7 +19,6 @@ if [ -z "$SANDBOX_USER_ID" ]; then
 fi
 
 if [ -z "$WORKSPACE_MOUNT_PATH" ]; then
-  # This is set to /opt/workspace in the Dockerfile. But if the user isn't mounting, we want to unset it so that OpenHands doesn't mount at all
   unset WORKSPACE_BASE
 fi
 
@@ -46,8 +45,8 @@ else
       fi
     fi
   fi
+
   usermod -aG app enduser
-  # get the user group of /var/run/docker.sock and set openhands to that group
   DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
   echo "Docker socket group id: $DOCKER_SOCKET_GID"
   if getent group $DOCKER_SOCKET_GID; then
@@ -65,5 +64,9 @@ else
 
   usermod -aG $DOCKER_SOCKET_GID enduser
   echo "Running as enduser"
-  su enduser /bin/bash -c "${*@Q}" # This magically runs any arguments passed to the script as a command
+  su enduser /bin/bash <<EOF
+cd ~/ai-shotta
+echo "🤖 Inside AI Shotta folder!"
+exec bash
+EOF
 fi

@@ -119,6 +119,9 @@ def action_from_dict(action: dict) -> Action:
     # handle deprecated args
     args = handle_action_deprecated_args(args)
 
+    args.pop("is_static", None)
+
+
     try:
         decoded_action = action_class(**args)
         if 'timeout' in action:
