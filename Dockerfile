@@ -1,19 +1,33 @@
-
-FROM node:18-slim
+# ─── Stage 1: Dependency install ─────────────────────────────
+FROM node:18-alpine AS builder
 
 WORKDIR /usr/src/app
 
-# Copy only package files first, so layers cache
+# Copy only package manifests to leverage Docker layer caching
 COPY package*.json ./
 
-# Install prod deps only
-RUN npm ci
+# Install only production deps
+RUN npm ci --only=production
 
-# Copy the rest of your code
-COPY . .
+# ─── Stage 2: Build minimal runtime image ────────────────────
+FROM node:18-alpine
 
-# Listen on our API port
-EXPOSE 3000
+# Create non‑root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 
-# Launch detector, engine & API in one shot
-CMD ["npm", "start"]
+WORKDIR /home/appuser/app
+
+# Copy over node_modules from builder
+COPY --chown=appuser:appgroup --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy rest of the source
+COPY --chown=appuser:appgroup . .
+
+# Expose your API port
+ARG API_PORT=3000
+ENV API_PORT=${API_PORT}
+EXPOSE ${API_PORT}
+
+# Start detector, engine & API together
+CMD ["npm","start"]

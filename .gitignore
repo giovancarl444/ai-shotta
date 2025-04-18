@@ -1,15 +1,17 @@
-node_modules
-.env
-.DS_Store
-*.log
-# Local caches & queues
-/data/enrichedCache.json
-/data/snipingQueue.json
-/data/snipingQueue_backup.json
+# Node
+node_modules/
+package-lock.json
+npm-debug.log
 
-# Logs
-/logs/*.log
-
-# Environment files
+# Env
 .env
 .env.local
+.env.*.local
+
+# Data & logs
+data/*.json
+logs/*.log
+
+# OS / IDE
+.DS_Store
+.vscode/

@@ -1,46 +1,33 @@
 // enrichment/instantEnrich.js
 require('dotenv').config();
-const { Connection, PublicKey } = require('@solana/web3.js');
-const { TokenListProvider, ENV }     = require('@solana/spl-token-registry');
+const { Connection } = require('@solana/web3.js');
+const { TokenListProvider } = require('@solana/spl-token-registry');
 
-const connection = new Connection(process.env.SOLANA_RPC_URL);
+const RPC = process.env.SOLANA_RPC_URL;
+const MAX = parseInt(process.env.ENRICH_MAX_RETRIES) || 2;
+const conn = new Connection(RPC);
+
+let tokenList = null;
+async function loadTokenList() {
+  if (!tokenList) {
+    tokenList = await new TokenListProvider().resolve();
+    tokenList = tokenList.filterByChainId(101).getList(); // 101 = mainnet
+  }
+  return tokenList;
+}
 
 module.exports = async function instantEnrich(address) {
-  try {
-    // 1) Try the on‑chain token registry
-    const allTokens = await new TokenListProvider().resolve();
-    const tokenList = allTokens
-      .filterByChainId(ENV.MainnetBeta)
-      .getList();
-    const info = tokenList.find(t => t.address === address);
-
-    if (info) {
-      return {
-        token:     info.symbol,
-        address:   info.address,
-        name:      info.name,
-        logoURI:   info.logoURI,
-        decimals:  info.decimals
-      };
-    }
-
-    // 2) Fallback: fetch mint account on‑chain for decimals
-    const pubkey = new PublicKey(address);
-    const resp   = await connection.getParsedAccountInfo(pubkey);
-    const parsed = resp.value?.data?.parsed?.info;
-    if (parsed && parsed.decimals != null) {
-      return {
-        token:     address.slice(0, 8),
-        address,
-        name:      address.slice(0, 8),
-        logoURI:   null,
-        decimals:  parsed.decimals
-      };
-    }
-
-    // 3) If that also fails, give up
-    return null;
-  } catch (err) {
-    throw new Error(`instantEnrich failed: ${err.message}`);
+  const list = await loadTokenList();
+  const info = list.find(t => t.address === address);
+  if (info) {
+    return {
+      token:    info.symbol,
+      name:     info.name,
+      address,
+      decimals: info.decimals,
+      logoURI:  info.logoURI
+    };
   }
+  // no on‑chain metadata found
+  return null;
 };
