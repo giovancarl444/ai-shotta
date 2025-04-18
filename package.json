@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "start": "concurrently \"node detectors/pumpDetector.js\" \"node snipeEngine.js\" \"node app.js\"",
+    "watch": "node detector/index.js",
     "migrate": "node scripts/manageQueue.js migrate",
     "cleanup": "node scripts/manageQueue.js cleanup",
     "simulate": "node scripts/runSimulation.js",
