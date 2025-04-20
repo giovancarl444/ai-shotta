@@ -1,0 +1,8 @@
+# Stage everything
+git add .
+
+# Commit with a clear message
+git commit -m "chore: snapshot current working state"
+
+# Push to your main branch
+git push origin main
