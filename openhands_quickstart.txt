@@ -1,0 +1,21 @@
+# OpenHands Quick Start Guide
+
+1. Open your terminal and navigate to the project root:
+   cd D:/AI Shotta/OpenDevin
+
+2. Bring up the services in detached mode:
+   docker compose up -d
+
+3. Access the UI in your browser:
+   http://localhost:3000
+
+4. To stop everything:
+   docker compose down
+
+## Data Persistence
+
+Workspace (./workspace)
+This folder is a bind‑mount of your local code. Any changes you make (via the agent or in your editor) are saved directly on your host filesystem.
+
+Conversations & Settings (~/.openhands-state)
+The agent’s conversation history, settings, and other state are stored here. This directory lives in your user home and will persist across PC restarts.
