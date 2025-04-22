@@ -1,4 +1,5 @@
-const fs = require('fs');
+// utils/queue.js
+const fs   = require('fs');
 const path = require('path');
 const queuePath = path.join(__dirname, '..', 'data', 'snipingQueue.json');
 
