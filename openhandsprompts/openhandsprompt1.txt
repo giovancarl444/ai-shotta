@@ -110,6 +110,10 @@ If you hit a blocker (e.g., missing API key, RPC URL, login, etc.), follow this 
 
 (Some of our private goals are:
 
+Done
+
+- [x]  Set up github GPT api free (max 10 requests / min, 50 daily) done
+
 **Important Functions**
 
 - [ ]  Make sure bot LEARNS always, based on its tech, winrate & loss-rate. Long term.
@@ -121,6 +125,7 @@ If you hit a blocker (e.g., missing API key, RPC URL, login, etc.), follow this 
 - [ ]  Implement a wallet tracker. Learns, adds, analyzes
 - [ ]  Twitter tracker,  follow right people, analyze news, knowledge over time
 - [ ]  Look into flashloans implementation (good idea ?)
+- [ ]  Analyze older/migrated tokens to analyze technically and socially, for knowledge and patterns
 
 **Bot Filtering Functions**
 
