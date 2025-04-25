@@ -4,6 +4,9 @@ import os
 from pathlib import Path
 from typing import Callable, Protocol
 
+from dotenv import load_dotenv; load_dotenv(); print("🔐 GITHUB_TOKEN =", os.getenv("GITHUB_TOKEN", "❌ Missing"))
+
+
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
 from openhands.controller.agent import Agent
 from openhands.controller.replay import ReplayManager
