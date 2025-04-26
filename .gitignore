@@ -1,121 +1,65 @@
-# Python cache & builds
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-dist/
-.eggs/
-*.egg-info/
-*.egg
-*.manifest
-*.spec
+# ---------- Your sniper-bot code ----------
+/src/
+/simulation/
+/utils/
+/openhandsprompts/
+/clean_requirements.py
+/build.sh
 
-# Python tools & testing
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.nox/
-.coverage*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-htmlcov/
-.pybuilder/
-.pyre/
-.pytype/
-.mypy_cache/
-.dmypy.json
-cython_debug/
-
-# Django / Flask / Scrapy
-local_settings.py
-db.sqlite3
-instance/
-.webassets-cache
-.scrapy
-
-# Jupyter / IPython
-.ipynb_checkpoints
-profile_default/
-ipython_config.py
-
-# Python envs
+# ---------- Python virtual environments ----------
+venv/
+venv310/
 .env
 .venv/
 env/
-venv/
 ENV/
 env.bak/
-.venv.bak/
-*venv/
-.python-version
-.pdm.toml
 
-# IDEs / OS
-.vscode/
-.idea/
-.DS_Store
+# ---------- Byte-compiled / cache ----------
+__pycache__/
+*.py[cod]
+*$$py.class
 
-# Logs
-logs/
+# ---------- Logs & state ----------
 *.log
-test_results*
-debug.log
-yarn-debug.log*
-yarn-error.log*
+logs/
+openhands-state/
+*.snapshot
 
-# Node
-node_modules/
-npm-debug.log
-
-# Env variants
-.env.*
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Output & builds
-output/
-site/
-coverage/
-dist/
+# ---------- Containers & build artifacts ----------
+containers/**
+!containers/app/entrypoint.sh
 build/
+dist/
+*.egg-info/
 
-# Project data
-/data/*.json
-evaluation/
-workspace/
-_test_workspace/
-runtime_*.tar
-config.toml*
-/frontend/build
-/frontend/dist
-/frontend/node_modules
-/frontend/.pnp
-/frontend/.env
-
-# Next.js cache
-.next/
-.next/cache/
-.next/static/
-.next/server/
-
-# Lock files
+# ---------- Node / frontend ----------
+node_modules/
+npm-debug.log*
 package-lock.json
 yarn.lock
-bun.lockb
-Pipfile.lock
-poetry.lock
-pdm.lock
+sniper-ui-with-tabs/
+frontend/
+.next/
 
-# Git & CI/CD
-.git
-.gitignore
-.gitattributes
+# ---------- Data / snapshots ----------
+data/
+workspace/
+_test_workspace/
+
+# ---------- Nested repos / submodules you don’t want tracked here ----------
+/OpenDevin/
+/openhands/
+/evaluation/
+
+# ---------- OS & IDE files ----------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---------- Misc ----------
+.Python
+*.so
+*.manifest
+*.spec
